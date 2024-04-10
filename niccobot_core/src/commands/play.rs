@@ -1,4 +1,5 @@
 use std::num::NonZeroU64;
+use std::sync::Arc;
 use std::time::Duration;
 use crate::client::{Context, Data, Error};
 use reqwest::Client as HttpClient;
@@ -11,6 +12,8 @@ use songbird::{
     SerenityInit,
     TrackEvent,
 };
+use songbird::error::PlayError;
+use songbird::input::{AuxMetadata, Compose, Input};
 use crate::commands::models::music::{ChannelDurationNotifier, TrackEndNotifier};
 
 
@@ -20,6 +23,12 @@ impl serenity::prelude::TypeMapKey for HttpKey {
     type Value = HttpClient;
 }
 
+pub struct TrackMetaKey;
+
+impl serenity::prelude::TypeMapKey for TrackMetaKey {
+    type Value = AuxMetadata;
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn play(
     ctx: Context<'_>,
@@ -27,8 +36,6 @@ pub async fn play(
     #[description = "Song to play"]
     track: String,
 ) -> Result<(), Error> {
-    // Defer the command execution
-
     // Extract guild_id
     let guild_id = match ctx.guild_id() {
         Some(id) => id,
@@ -73,8 +80,21 @@ pub async fn play(
             let mut handle = handle_lock.lock().await;
             let send_http = ctx.serenity_context().http.clone();
             let http_client = get_http_client(ctx).await;
-            let src = YoutubeDl::new(http_client, track);
-            let song = handle.play_input(src.into());
+            let mut src =  YoutubeDl::new(http_client, track);
+            
+            let mut input: Input = src.into();
+            let metadata = input.aux_metadata().await?;
+            
+            let track_handle = handle.enqueue_input(input).await;
+
+            track_handle
+                .typemap()
+                .write()
+                .await
+                .insert::<TrackMetaKey>(metadata.clone());
+            
+            
+            ctx.channel_id().say(&ctx.serenity_context().http, "Playing Song").await?;
 
 
             handle.add_global_event(

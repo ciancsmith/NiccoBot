@@ -1,3 +1,4 @@
+use std::env;
 use std::sync::Arc;
 use reqwest::Client as HttpClient;
 use crate::intents::NiccoBotIntents;
@@ -7,10 +8,13 @@ use serenity::prelude::*;
 use songbird::SerenityInit;
 use poise::serenity_prelude as serenity;
 use tracing::info;
-use crate::commands::{ age, play };
+use crate::commands::{age, play, get_accounts, add_accounts};
+use crate::db::db::DB;
 use crate::models::http::{HttpKey};
+
 pub struct Data {
     pub tracks: Arc<Mutex<Vec<String>>>,
+    pub db: Arc<DB>,
 }
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
@@ -20,10 +24,8 @@ pub struct Niccobot {
     token: String,
     #[builder(default = "NiccoBotIntents::default().into()")]
     intents: GatewayIntents,
-
+    db: Arc<DB>,
 }
-
-
 
 impl Niccobot {
     #[must_use]
@@ -33,7 +35,9 @@ impl Niccobot {
         let framework = poise::Framework::builder()
             .options(poise::FrameworkOptions {
                 commands: vec![age(),
-                               play(),],
+                               play(), 
+                               get_accounts(), 
+                               add_accounts()],
                 pre_command: |ctx| {
                   Box::pin(async move {
                       info!("Performing Command {}...", ctx.command().qualified_name);
@@ -66,6 +70,7 @@ impl Niccobot {
                     poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                     Ok(Data {
                         tracks: Arc::new(Mutex::new(Vec::new())),
+                        db: self.db.clone(),
                     })
                 })
             })
@@ -76,11 +81,28 @@ impl Niccobot {
             .register_songbird()
             .type_map_insert::<HttpKey>(HttpClient::new())
             .await?;
-        client
-            .start()
-            .await?;
 
+        let _ = client
+            .start()
+            .await
+            .map_err(|why| println!("Client ended: {:?}", why));
+
+        tokio::spawn(async move {
+            let _ = client
+                .start()
+                .await
+                .map_err(|why| println!("Client ended: {:?}", why));
+        });
         Ok(())
+    }
+}
+
+impl NiccobotBuilder {
+    pub async fn with_database(mut self, db_url: &str) -> Result<Self, sqlx::Error> {
+        let database: DB = DB::new(db_url, None).await;
+        database.send_migrations().await;
+        self.db = Option::from(Arc::new(database));
+        Ok(self)
     }
 }
 
