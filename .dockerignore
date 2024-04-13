@@ -1,0 +1,6 @@
+
+*/target
+*.md
+*/scripts
+*.sqlite*
+*/helm

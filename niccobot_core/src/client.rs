@@ -1,14 +1,13 @@
-use std::env;
+
 use std::sync::Arc;
 use reqwest::Client as HttpClient;
 use crate::intents::NiccoBotIntents;
 extern crate dotenv;
 use serenity::all::GatewayIntents;
 use serenity::prelude::*;
-use songbird::SerenityInit;
 use poise::serenity_prelude as serenity;
 use tracing::info;
-use crate::commands::{age, play, get_accounts, add_accounts};
+use crate::commands::{age, get_accounts, add_accounts};
 use crate::db::db::DB;
 use crate::models::http::{HttpKey};
 
@@ -35,7 +34,6 @@ impl Niccobot {
         let framework = poise::Framework::builder()
             .options(poise::FrameworkOptions {
                 commands: vec![age(),
-                               play(), 
                                get_accounts(), 
                                add_accounts()],
                 pre_command: |ctx| {
@@ -78,7 +76,6 @@ impl Niccobot {
 
         let mut client = Client::builder(self.token, self.intents)
             .framework(framework)
-            .register_songbird()
             .type_map_insert::<HttpKey>(HttpClient::new())
             .await?;
 

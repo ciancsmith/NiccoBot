@@ -15,5 +15,4 @@ serenity = {workspace = true}
 dotenv = {workspace = true}
 poise = {workspace = true}
 derive_builder = {workspace = true}
-songbird = {workspace = true}
 reqwest = {workspace = true }

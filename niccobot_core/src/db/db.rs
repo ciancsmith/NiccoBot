@@ -1,14 +1,7 @@
-use std::collections::HashMap;
-use std::fs;
-use std::io::{BufReader, Write};
 use sqlx::{Sqlite, SqlitePool, migrate::MigrateDatabase,
-           Error, migrate::MigrateError};
+           Error};
 use tracing::info;
-use tracing::log::error;
-use std::fs::{DirBuilder, File, OpenOptions};
-use serde_json::Value;
-use tracing_subscriber::fmt::format;
-
+use std::path::PathBuf;
 
 pub struct DB {
     pub url: String,
@@ -53,10 +46,9 @@ impl DB {
     }
 
     pub async fn send_migrations(&self) {
-        let crate_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR to be set");
-        let migrations_dir = std::path::Path::new(&crate_dir).parent().expect("Crate directory has no parent")
-            .join("migrations");
-        let migrator = sqlx::migrate::Migrator::new(migrations_dir).await.unwrap();
+        let migrations_dir = std::env::var("MIGRATIONS_DIR").expect("MIGRATIONS_DIR must be set");
+        let migrations_path = PathBuf::from(migrations_dir);
+        let migrator = sqlx::migrate::Migrator::new(migrations_path).await.unwrap();
         migrator.run(&self.pool).await.map(|_| "Migration Success".to_string());
     }
 

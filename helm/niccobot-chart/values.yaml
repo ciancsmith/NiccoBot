@@ -1,0 +1,30 @@
+replicaCount: 1
+
+image:
+  repository: crowlc/niccobot
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+  pullSecret: dockerhub-secret
+
+service:
+  type: ClusterIP
+  port: 80
+
+env:
+  - name: DOTENV
+    value: "/niccobot/.env"
+
+
+persistentVolume:
+  name: sqlite-pv
+  storageClassName: manual
+  capacity: 3Gi
+  accessMode: ReadWriteOnce
+  hostPath: "/niccobot/database.sqlite"
+
+persistentVolumeClaim:
+  name: sqlite-pvc
+  accessMode: ReadWriteOnce
+  capacity: 3Gi
+
+resources:
