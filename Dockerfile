@@ -1,5 +1,5 @@
 FROM rust:1.77.2 as builder
-LABEL authors="Cian Crowley-Smith"
+LABEL authors="csmith"
 
 WORKDIR /niccobot
 
