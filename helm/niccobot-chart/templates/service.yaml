@@ -8,6 +8,6 @@ spec:
   type: {{ .Values.service.type }}
   ports:
     - port: {{ .Values.service.port }}
-      targetPort: 80
+      targetPort: 8080
   selector:
     {{- include "niccobot.selectorLabels" . | nindent 4 }}

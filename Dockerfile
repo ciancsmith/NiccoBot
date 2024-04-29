@@ -3,13 +3,20 @@ LABEL authors="Cian Crowley-Smith"
 
 WORKDIR /niccobot
 
-RUN apt-get update && apt-get install -y cmake pkg-config libopus-dev
+RUN apt-get update && apt-get install -y cmake pkg-config
 
 # Copy the manifests
 COPY ./Cargo.toml ./Cargo.lock ./
 
-# If you have a workspace, copy the entire workspace directory
-COPY . .
+# Copy specific directories
+COPY ./niccobot ./niccobot
+COPY ./niccobot_util ./niccobot_util
+COPY ./niccobot_core ./niccobot_core
+COPY ./migrations ./migrations
+
+# Copy the environment file
+COPY ./.env ./.env
+
 
 # Build the dependencies (and cache them)
 RUN cargo build --release --bin niccobot

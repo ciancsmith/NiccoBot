@@ -1,6 +1,11 @@
+# Ignore everything
+**
 
-*/target
-*.md
-*/scripts
-*.sqlite*
-*/helm
+# But not these files and directories...
+!Cargo.toml
+!Cargo.lock
+!.env
+!niccobot/
+!niccobot_util/
+!niccobot_core/
+!migrations/

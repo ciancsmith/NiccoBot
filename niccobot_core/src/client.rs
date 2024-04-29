@@ -7,7 +7,7 @@ use serenity::all::GatewayIntents;
 use serenity::prelude::*;
 use poise::serenity_prelude as serenity;
 use tracing::info;
-use crate::commands::{age, get_accounts, add_accounts};
+use crate::commands::{age, get_accounts, add_accounts, get_key, add_smurf, get_smurf_info};
 use crate::db::db::DB;
 use crate::models::http::{HttpKey};
 
@@ -35,7 +35,10 @@ impl Niccobot {
             .options(poise::FrameworkOptions {
                 commands: vec![age(),
                                get_accounts(), 
-                               add_accounts()],
+                               add_accounts(),
+                               get_key(), 
+                               add_smurf(),
+                               get_smurf_info()],
                 pre_command: |ctx| {
                   Box::pin(async move {
                       info!("Performing Command {}...", ctx.command().qualified_name);
@@ -95,8 +98,8 @@ impl Niccobot {
 }
 
 impl NiccobotBuilder {
-    pub async fn with_database(mut self, db_url: &str) -> Result<Self, sqlx::Error> {
-        let database: DB = DB::new(db_url, None).await;
+    pub async fn with_database(mut self, db_url: String) -> Result<Self, sqlx::Error> {
+        let database: DB = DB::new(&db_url, None).await;
         database.send_migrations().await;
         self.db = Option::from(Arc::new(database));
         Ok(self)

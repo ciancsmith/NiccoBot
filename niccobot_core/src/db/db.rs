@@ -10,7 +10,7 @@ pub struct DB {
 }
 
 impl DB {
-    pub async fn new(url: &str, tables: Option<Vec<&str>>) -> DB {
+    pub async fn new(url: &String, tables: Option<Vec<&str>>) -> DB {
 
         if !Sqlite::database_exists(url).await.unwrap_or(false) {
             match Sqlite::create_database(url).await {
@@ -21,6 +21,7 @@ impl DB {
             println!("Database already exists");
         }
 
+        info!("url: {:?}", url);
         let pool = SqlitePool::connect(url).await.unwrap();
         let url = url.to_string();
         let tables_vec: Vec<String>;
@@ -48,6 +49,7 @@ impl DB {
     pub async fn send_migrations(&self) {
         let migrations_dir = std::env::var("MIGRATIONS_DIR").expect("MIGRATIONS_DIR must be set");
         let migrations_path = PathBuf::from(migrations_dir);
+        info!("migrations path: {:?}", &migrations_path);
         let migrator = sqlx::migrate::Migrator::new(migrations_path).await.unwrap();
         migrator.run(&self.pool).await.map(|_| "Migration Success".to_string());
     }
