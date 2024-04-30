@@ -1,4 +1,4 @@
-use poise::serenity_prelude as serenity;
+use poise::{CreateReply, serenity_prelude as serenity};
 use crate::client::{Context, Error};
 use sqlx::sqlite::SqlitePool;
 use sqlx::{Row};
@@ -10,139 +10,15 @@ use serenity::builder::CreateMessage;
 use tokio::time::{sleep, Duration};
 use tracing::log::error;
 use niccobot_util::crypto::{encrypt, decrypt, generate_secure_salt, hash_string};
+use crate::commands::accounts::smurfs;
 
-
-// #[poise::command(slash_command, prefix_command)]
-// pub async fn get_smurfs(
-//     ctx: Context<'_>,
-//     #[description = "Discord user to check"] user: Option<serenity::User>,
-// ) -> Result<(), Error> {
-//     let user = user.as_ref().unwrap_or_else(|| ctx.author());
-//     let db_pool = &ctx.data().db.pool;
-//     let smurfs_exist = "SELECT EXISTS(SELECT 1 FROM smurfs)";
-//
-//     let (exists,): (bool,) = sqlx::query_as(smurfs_exist)
-//         .fetch_one(db_pool)
-//         .await?;
-//
-//     if exists {
-//         info!("User {:?} exists in db retrieving data", &user.name);
-//         let platforms_query = "SELECT platforms FROM game_ids WHERE discord_username = ?";
-//         let row = sqlx::query(platforms_query)
-//             .bind(&user.name)
-//             .fetch_one(db_pool)
-//             .await?;
-//
-//         let platform_data: String = row.try_get("platforms")
-//             .unwrap_or_else(|_| "{}".to_string());
-//         let platforms: Value = serde_json::from_str(&platform_data)?;
-//         let platform_object = platforms.as_object().unwrap();
-//         let mut pretty_output = String::new();
-//         for (key,value) in platform_object {
-//             pretty_output.push_str(&format!("**{}**: {}\n", key, value))
-//         }
-//         ctx.say(pretty_output).await?;
-//     }
-//     else {
-//         info!("User {:?} does not exists in db", &user.name);
-//         ctx.say(format!("User '{}' does not have any account details to \
-//                              share, he is a bit of a loner", &user.name)).await?;
-//     }
-//
-//     Ok(())
-// }
-//
-// #[poise::command(slash_command, prefix_command)]
-// pub async fn add_accounts(
-//     ctx: Context<'_>,
-//     #[description = "Discord user to check"] user: Option<serenity::User>,
-//     #[description = "Platform name"] platform: String,
-//     #[description = "Username for platform"] platform_username: String,
-// ) -> Result<(), Error> {
-//     let user = user.as_ref().unwrap_or_else(|| ctx.author());
-//     let db_pool = &ctx.data().db.pool;
-//     let user_exists_query = "SELECT EXISTS(SELECT 1 FROM game_ids WHERE discord_username = ?)";
-//
-//     let (user_exists,): (bool,) = sqlx::query_as(user_exists_query)
-//         .bind(&user.name)
-//         .fetch_one(db_pool)
-//         .await?;
-//
-//     if user_exists {
-//         info!("User {:?} exists in db retrieving data", &user.name);
-//         let validated_platform_name = validate_platform(platform);
-//         match check_platform_exists(&validated_platform_name, db_pool, &user.name).await {
-//             Ok(Some(mut platform)) => {
-//                 info!("Platform exists already");
-//                 let platform_object = platform.as_object_mut().unwrap();
-//                 platform_object.insert(validated_platform_name, Value::String(platform_username.clone()));
-//                 match update_platforms_in_db(db_pool, &user.name, platform_object).await {
-//                     Ok(()) => {
-//                         ctx.say("Added new game id details to account :)").await?;
-//                     }
-//                     Err(e) => {
-//                         error!("Error occured {:?}", e);
-//                         ctx.say("An error occured while trying to add your details please contact the bot administrator").await?;
-//                     }
-//                 }
-//             }
-//             Ok(None) => {
-//                 info!("Platform does not exist in table columns adding...");
-//                 let alter_query = "SELECT * FROM game_ids WHERE discord_username = ?";
-//
-//                 let _result = sqlx::query(alter_query)
-//                     .bind(&validated_platform_name)
-//                     .execute(db_pool)
-//                     .await
-//                     .unwrap();
-//
-//             }
-//             Err(e) => error!("An error occurred: {}", e)
-//         }
-//     }
-//     else {
-//         info!("User {:?} does not exists in db creating empty entry", &user.name);
-//         let insert_user_query = "INSERT INTO game_ids (discord_username) VALUES (?)";
-//
-//         sqlx::query(insert_user_query)
-//             .bind(&user.name)
-//             .execute(db_pool)
-//             .await?;
-//         info!("User {} added to the database. Adding platform details", &user.name);
-//         let validated_platform_name = validate_platform(platform);
-//         match check_platform_exists(&validated_platform_name, db_pool, &user.name).await {
-//             Ok(Some(mut platform)) => {
-//                 info!("Platform data exists already");
-//                 let platform_object = platform.as_object_mut().unwrap();
-//                 platform_object.insert(validated_platform_name, Value::String(platform_username.clone()));
-//                 match update_platforms_in_db(db_pool, &user.name, platform_object).await {
-//                     Ok(()) => {
-//                         ctx.say("Added new game id details to account :)").await?;
-//                     }
-//                     Err(e) => {
-//                         error!("Error occured {:?}", e);
-//                         ctx.say("An error occured while trying to add your details please contact the bot administrator").await?;
-//                     }
-//                 }
-//             }
-//             Ok(None) => {
-//                 info!("Platform does not exist in table columns adding...");
-//                 let alter_query = "SELECT * FROM game_ids WHERE discord_username = ?";
-//                 let _platforms = {};
-//
-//                 let _result = sqlx::query(alter_query)
-//                     .bind(&validated_platform_name)
-//                     .execute(db_pool)
-//                     .await
-//                     .unwrap();
-//
-//             }
-//             Err(e) => error!("An error occurred: {}", e)
-//         }
-//     }
-//
-//     Ok(())
-// }
+#[derive(Debug)]
+struct Smurf {
+    username: String,
+    platform: String,
+    info: String,
+    password: String,
+}
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn get_key(
@@ -352,9 +228,32 @@ pub async fn get_smurf_list(
         let get_account_query = "SELECT * FROM smurfs";
         let smurf_exists = sqlx::query(get_account_query)
             .fetch_all(&ctx.data().db.pool)
-            .await?;
-        
+            .await?
+            .into_iter();
 
+        let accounts: Vec<Smurf> = smurf_exists
+            .map(|row| {
+                Smurf {
+                    username: row.get("account_name"),
+                    password: row.get("password"),
+                    platform: row.get("platform"),
+                    info: row.get("info")
+                }})
+            .collect();
+
+        let fields: Vec<(String, String, bool)> = accounts.iter()
+            .map(|account| {
+                let field_name = account.username.clone();
+                let field_value = format!("Username: {}, Platform: {}, Info: {}", account.username, account.platform, account.info);
+                (field_name, field_value, false)
+            }).collect();
+        
+        let embed = serenity::CreateEmbed::default()
+            .description("Here is a list of smurf accounts")
+            .title("Smurf Accounts")
+            .fields(fields);
+        let message = CreateMessage::new().embed(embed);
+        &ctx.channel_id().send_message(&ctx.http(), message).await?;
     }
     else {
         return Err(Error::from("User does not have the necessary roles to run this command"))
@@ -402,7 +301,7 @@ pub async fn get_smurf_info(
 
         let auth_key_encoded: String = key;
 
-        let auth_key_vec = general_purpose::STANDARD.decode(&auth_key_encoded).map_err(|_| "Base64 decode error".to_string());
+        let auth_key_vec = general_purpose::STANDARD.decode(&auth_key_encoded).map_err(|_| "Base64 decode error".to_string()).unwrap();
 
         let auth_key: [u8; 32] = auth_key_vec.as_slice().try_into().unwrap();
         let get_account_query = "SELECT * FROM smurfs WHERE account_name = ?";
@@ -476,52 +375,3 @@ pub async fn get_smurf_info(
 
     Ok(())
 }
-
-
-
-// pub fn validate_platform(mut platform: String) -> String {
-//     if platform.to_lowercase().contains("_id") {
-//         platform.to_lowercase()
-//     }
-//     else {
-//         platform.push_str("_id");
-//         platform.to_lowercase()
-//     }
-// }
-
-
-// pub async fn update_platforms_in_db(db_pool: &SqlitePool,
-//                                     username: &str,
-//                                     platforms: &mut Map<String, Value>) -> Result<(), anyhow::Error> {
-//     let platforms_str = to_string(platforms)?;
-//
-//     let update_query = "UPDATE game_ids SET platforms = ? WHERE discord_username = ?";
-//
-//     let result = sqlx::query(update_query)
-//         .bind(platforms_str)
-//         .bind(username)
-//         .execute(db_pool)
-//         .await?;
-//     Ok(())
-// }
-//
-// pub async fn check_platform_exists(
-//     _platform: &str,
-//     db_pool: &SqlitePool,
-//     username: &str
-// ) -> Result<Option<Value>, anyhow::Error> {
-//     let query = "SELECT platforms FROM game_ids WHERE discord_username = ?";
-//
-//     if let Some(row) = sqlx::query(query)
-//         .bind(username)
-//         .fetch_optional(db_pool)
-//         .await? {
-//         let platform_data: String = row.try_get("platforms")
-//             .unwrap_or_else(|_| "{}".to_string());
-//         let platforms: Value = serde_json::from_str(&platform_data)?;
-//         Ok(Some(platforms))
-//     }
-//     else {
-//         Ok(None)
-//     }
-// }

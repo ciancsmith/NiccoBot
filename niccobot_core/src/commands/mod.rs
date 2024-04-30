@@ -10,3 +10,4 @@ pub use accounts::add_accounts;
 pub use smurfs::get_key;
 pub use smurfs::add_smurf;
 pub use smurfs::get_smurf_info;
+pub use smurfs::get_smurf_list;

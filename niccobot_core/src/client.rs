@@ -7,7 +7,8 @@ use serenity::all::GatewayIntents;
 use serenity::prelude::*;
 use poise::serenity_prelude as serenity;
 use tracing::info;
-use crate::commands::{age, get_accounts, add_accounts, get_key, add_smurf, get_smurf_info};
+use crate::commands::{age, get_accounts, add_accounts, get_key,
+                      add_smurf, get_smurf_info, get_smurf_list};
 use crate::db::db::DB;
 use crate::models::http::{HttpKey};
 
@@ -38,7 +39,8 @@ impl Niccobot {
                                add_accounts(),
                                get_key(), 
                                add_smurf(),
-                               get_smurf_info()],
+                               get_smurf_info(),
+                               get_smurf_list()],
                 pre_command: |ctx| {
                   Box::pin(async move {
                       info!("Performing Command {}...", ctx.command().qualified_name);
