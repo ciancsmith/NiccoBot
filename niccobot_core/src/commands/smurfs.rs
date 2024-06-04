@@ -26,7 +26,6 @@ pub async fn get_key(
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().ok_or_else(|| Error::from("This command must be executed in a guild."))?;
     let roles_to_check = if let Some(guild) = ctx.guild() {
-        println!("Guild ID where the command was executed: {}", &guild.id);
         let guild_roles_data = &guild.roles;
         guild_roles_data
             .iter()
@@ -104,6 +103,21 @@ pub async fn get_key(
     Ok(())
 }
 
+
+async fn check_account_exists(username: &String, platform: &String, database_pool: &SqlitePool) -> Result<bool, sqlx::Error> {
+    let query = "SELECT 1 FROM smurfs WHERE account_name = $1 AND platform = $2";
+    let result = sqlx::query(query)
+        .bind(username)
+        .bind(platform)
+        .fetch_optional(database_pool)
+        .await?;
+    
+    match result {
+        Some(_) => Ok(true),
+        None => Ok(false),
+    }
+}
+
 #[poise::command(slash_command, prefix_command)]
 pub async fn add_smurf(
     ctx: Context<'_>,
@@ -114,7 +128,6 @@ pub async fn add_smurf(
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().ok_or_else(|| Error::from("This command must be executed in a guild."))?;
     let roles_to_check = if let Some(guild) = ctx.guild() {
-        println!("Guild ID where the command was executed: {}", &guild.id);
         let guild_roles_data = &guild.roles;
         guild_roles_data
             .iter()
@@ -139,54 +152,88 @@ pub async fn add_smurf(
     }
 
     if has_verified_role {
-        let secret: &[u8; 13] = b"$m1tHc!@n2022";
-        let salt = generate_secure_salt();
-        let key = hash_string(secret, &salt);
+        let account_exists = check_account_exists(&username, &platform, &ctx.data().db.pool).await?;
+        if account_exists {
+            info!("account already exists in database not writing...");
+            &ctx.say("These account details already exist for the given platform and username").await?;
+        }
+        else {
+            let key: Result<[u8; 32],  argon2::Error>;
+            let mut auth_key_in_db: bool = false;
+            let secret: &[u8; 13] = b"$m1tHc!@n2022";
+            let salt: [u8; 16];
+            let auth_key_exists_query = "SELECT auth_key, salt FROM auth_keys WHERE table_name = 'smurfs'";
+            let auth_key_exists = sqlx::query(auth_key_exists_query)
+                .fetch_optional(&ctx.data().db.pool)
+                .await?;
 
-        match key {
-            Ok(key) => {
-                match encrypt(&password, &key) {
-                    Ok((ciphertext, nonce)) => {
-                        info!("Successfully encrypted password beginning write sequence to database");
-                        println!("Ciphertext: {:?}", ciphertext);
-                        println!("Nonce: {:?}", nonce);
-                        sqlx::query("INSERT INTO smurfs (account_name, salt, nonce, password, platform) VALUES (?, ?, ?, ?, ?)")
-                            .bind(username)
-                            .bind(general_purpose::STANDARD.encode(&salt))
-                            .bind(general_purpose::STANDARD.encode(&nonce))
-                            .bind(general_purpose::STANDARD.encode(&ciphertext))
-                            .bind(platform)
-                            .execute(&ctx.data().db.pool)
-                            .await
-                            .expect("Failed to insert smurf data into the database");
-                        
-                        sqlx::query("INSERT INTO auth_keys (auth_key, table_name) VALUES (?, ?)")
-                            .bind(general_purpose::STANDARD.encode(&key))
-                            .bind("smurfs")
-                            .execute(&ctx.data().db.pool)
-                            .await
-                            .expect("Failed to insert into auth_keys");
-                        
+            match auth_key_exists {
+                Some(row) => {
+                    let auth_key_result: String = row.try_get("auth_key").unwrap();
+                    let salt_result: String = row.try_get("salt").unwrap();
+                    let decoded_salt = general_purpose::STANDARD.decode(salt_result).map_err(|_| "Base64 decode error".to_string()).unwrap();
+                    let decoded_auth_key = general_purpose::STANDARD.decode(auth_key_result).map_err(|_| "Base64 decode error".to_string()).unwrap();
+                    let auth_key_slice: [u8; 32] = decoded_auth_key.as_slice().try_into().unwrap();
+                    let salt_slice: [u8; 16] = decoded_salt.as_slice().try_into().unwrap();
+                    auth_key_in_db = true;
+                    salt = salt_slice;
+                    key = Ok(auth_key_slice)
 
-                        info!("Successfully encrypted password and stored in the database");
-                        
-                        // match decrypt(&ciphertext, &nonce, &key) {
-                        //     Ok(plaintext) => println!("Decrypted text: {}", plaintext),
-                        //     Err(e) => println!("Decryption failed: {:?}", e),
-                        // }
-                    }
-                    Err(e) => {
-                        error!("Something went wrong in encryption process: {:?}", e);
-                    }
+                }
+                None => {
+                    salt = generate_secure_salt();
+                    key = hash_string(secret, &salt);
                 }
             }
-            Err(e) => {
-                error!("Error generating hashed key for encryption");
+
+            match key {
+                Ok(key) => {
+                    match encrypt(&password, &key) {
+                        Ok((ciphertext, nonce)) => {
+                            info!("Successfully encrypted password beginning write sequence to database");
+                            sqlx::query("INSERT INTO smurfs (account_name, salt, nonce, password, platform, info) VALUES (?, ?, ?, ?, ?, ?)")
+                                .bind(username)
+                                .bind(general_purpose::STANDARD.encode(&salt))
+                                .bind(general_purpose::STANDARD.encode(&nonce))
+                                .bind(general_purpose::STANDARD.encode(&ciphertext))
+                                .bind(platform)
+                                .bind(info.unwrap_or_else(|| "".parse().unwrap()))
+                                .execute(&ctx.data().db.pool)
+                                .await
+                                .expect("Failed to insert smurf data into the database");
+
+                            if auth_key_in_db {
+                                info!("Authorization key already exists in db not writing...");
+                            }
+                            else {
+                                info!("First Entry to database writing key and salt to DB table auth_keys...");
+                                sqlx::query("INSERT INTO auth_keys (auth_key, table_name, salt) VALUES (?, ?, ?)")
+                                    .bind(general_purpose::STANDARD.encode(&key))
+                                    .bind("smurfs")
+                                    .bind(general_purpose::STANDARD.encode(&salt))
+                                    .execute(&ctx.data().db.pool)
+                                    .await
+                                    .expect("Failed to insert into auth_keys");
+                            }
+
+
+                            info!("Successfully encrypted password and stored in the database");
+                            &ctx.say("Successfully wrote new smurf account details to database retrieve them using the get_smurf_list command").await?;
+
+                        }
+                        Err(e) => {
+                            error!("Something went wrong in encryption process: {:?}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Error generating hashed key for encryption");
+                }
             }
         }
-
     }
     else {
+        &ctx.say("You do not have permission to use this command ask Nicco and he may grant access").await?;
     }
 
     Ok(())
@@ -199,7 +246,6 @@ pub async fn get_smurf_list(
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().ok_or_else(|| Error::from("This command must be executed in a guild."))?;
     let roles_to_check = if let Some(guild) = ctx.guild() {
-        println!("Guild ID where the command was executed: {}", &guild.id);
         let guild_roles_data = &guild.roles;
         guild_roles_data
             .iter()
@@ -244,7 +290,7 @@ pub async fn get_smurf_list(
         let fields: Vec<(String, String, bool)> = accounts.iter()
             .map(|account| {
                 let field_name = account.username.clone();
-                let field_value = format!("Username: {}, Platform: {}, Info: {}", account.username, account.platform, account.info);
+                let field_value = format!("Platform: {}, Info: {}", account.platform, account.info);
                 (field_name, field_value, false)
             }).collect();
         
@@ -270,7 +316,6 @@ pub async fn get_smurf_info(
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().ok_or_else(|| Error::from("This command must be executed in a guild."))?;
     let roles_to_check = if let Some(guild) = ctx.guild() {
-        println!("Guild ID where the command was executed: {}", &guild.id);
         let guild_roles_data = &guild.roles;
         guild_roles_data
             .iter()

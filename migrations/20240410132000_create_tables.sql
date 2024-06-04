@@ -15,5 +15,6 @@ CREATE TABLE smurfs (
 CREATE TABLE auth_keys (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     table_name TEXT NOT NULL UNIQUE,
-    auth_key TEXT NOT NULL UNIQUE
+    auth_key TEXT NOT NULL UNIQUE,
+    salt TEXT NOT NULL
 );
